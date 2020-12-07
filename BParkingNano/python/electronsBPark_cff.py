@@ -198,6 +198,7 @@ regressionForEle = cms.EDProducer(
 electronsForAnalysis = cms.EDProducer(
   'ElectronMerger',
   trgMuon = cms.InputTag('muonTrgSelector:trgMuons'),
+  muons = cms.InputTag("slimmedMuons"),
   lowptSrc = cms.InputTag('regressionForEle:regressedLowPtElectrons'),
   pfSrc    = cms.InputTag('regressionForEle:regressedElectrons'),
   ptbiasedSeeding = cms.InputTag("lowPtGsfElectronSeedValueMaps","ptbiased","RECO"),
@@ -208,6 +209,9 @@ electronsForAnalysis = cms.EDProducer(
   ## cleaning wrt trigger muon [-1 == no cut]
   drForCleaning_wrtTrgMuon = cms.double(0.03),
   dzForCleaning_wrtTrgMuon = cms.double(1.),
+  ## cleaning wrt muon [-1 == no cut]
+  drForCleaning_wrtMuon = cms.double(0.03),
+  dzForCleaning_wrtMuon = cms.double(1.),
   ## cleaning between pfEle and lowPtGsf
   drForCleaning = cms.double(0.03),
   dzForCleaning = cms.double(0.5), ##keep tighter dZ to check overlap of pfEle with lowPt (?)
@@ -263,6 +267,7 @@ electronBParkTable = cms.EDProducer("SimpleCandidateFlatTableProducer",
         pfmvaId = Var("userFloat('pfmvaId')",float,doc="MVA ID for pfEle, 20 for low pT"),
         fBrem = Var("fbrem()",float,doc="brem fraction from the gsf fit",precision=12),
         isPFoverlap = Var("userInt('isPFoverlap')",bool,doc="flag lowPt ele overlapping with pf in selected_pf_collection",precision=8),
+        isMatchedToMuon = Var("userInt('isMatchedToMuon')",bool,doc="electron is matched to a muon"),
         convOpen = Var("userInt('convOpen')",bool,doc="Matched to a conversion in gsfTracksOpenConversions collection"),
         convLoose = Var("userInt('convLoose')",bool,doc="Matched to a conversion satisfying Loose WP (see code)"),
         convTight = Var("userInt('convTight')",bool,doc="Matched to a conversion satisfying Tight WP (see code)"),

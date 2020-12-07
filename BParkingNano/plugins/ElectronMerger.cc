@@ -36,6 +36,7 @@ public:
 
   explicit ElectronMerger(const edm::ParameterSet &cfg):
     triggerMuons_{ consumes<pat::MuonCollection>( cfg.getParameter<edm::InputTag>("trgMuon") )},
+    muonToken_(consumes<pat::MuonCollection>(cfg.getParameter<edm::InputTag>("muons"))),
     lowpt_src_{ consumes<pat::ElectronCollection>( cfg.getParameter<edm::InputTag>("lowptSrc") )},
     pf_src_{ consumes<pat::ElectronCollection>( cfg.getParameter<edm::InputTag>("pfSrc") )},
     ptBiased_src_{ consumes<edm::ValueMap<float>>( cfg.getParameter<edm::InputTag>("ptbiasedSeeding") )},
@@ -47,6 +48,8 @@ public:
     beamSpot_{ consumes<reco::BeamSpot> ( cfg.getParameter<edm::InputTag>("beamSpot") )},
     drTrg_cleaning_{cfg.getParameter<double>("drForCleaning_wrtTrgMuon")},
     dzTrg_cleaning_{cfg.getParameter<double>("dzForCleaning_wrtTrgMuon")},
+    drMu_cleaning_{cfg.getParameter<double>("drForCleaning_wrtMuon")},
+    dzMu_cleaning_{cfg.getParameter<double>("dzForCleaning_wrtMuon")},
     dr_cleaning_{cfg.getParameter<double>("drForCleaning")},
     dz_cleaning_{cfg.getParameter<double>("dzForCleaning")},
     flagAndclean_{cfg.getParameter<bool>("flagAndclean")},
@@ -72,6 +75,7 @@ public:
   
 private:
   const edm::EDGetTokenT<pat::MuonCollection> triggerMuons_;
+  const edm::EDGetTokenT<pat::MuonCollection> muonToken_;
   const edm::EDGetTokenT<pat::ElectronCollection> lowpt_src_;
   const edm::EDGetTokenT<pat::ElectronCollection> pf_src_;
   const edm::EDGetTokenT<edm::ValueMap<float>> ptBiased_src_;
@@ -83,6 +87,8 @@ private:
   const edm::EDGetTokenT<reco::BeamSpot> beamSpot_;
   const double drTrg_cleaning_;
   const double dzTrg_cleaning_;
+  const double drMu_cleaning_;
+  const double dzMu_cleaning_;
   const double dr_cleaning_;
   const double dz_cleaning_;
   const bool flagAndclean_;
@@ -103,6 +109,8 @@ void ElectronMerger::produce(edm::StreamID, edm::Event &evt, edm::EventSetup con
   //input
   edm::Handle<pat::MuonCollection> trgMuon;
   evt.getByToken(triggerMuons_, trgMuon);
+  edm::Handle<pat::MuonCollection> muons;
+  evt.getByToken(muonToken_, muons);
   edm::Handle<pat::ElectronCollection> lowpt;
   evt.getByToken(lowpt_src_, lowpt);
   edm::Handle<pat::ElectronCollection> pf;
@@ -184,6 +192,7 @@ void ElectronMerger::produce(edm::StreamID, edm::Event &evt, edm::EventSetup con
    ele.addUserFloat("pfmvaId", pf_mva_id);
    ele.addUserFloat("chargeMode", ele.charge());
    ele.addUserInt("isPFoverlap", 0);
+   ele.addUserInt("isMatchedToMuon", 0);
 
    // Attempt to match electrons to conversions in "gsfTracksOpenConversions" collection (NO MATCHES EXPECTED)
    ConversionInfo info;
@@ -274,6 +283,15 @@ void ElectronMerger::produce(edm::StreamID, edm::Event &evt, edm::EventSetup con
    else if(clean_out) ele.addUserInt("isPFoverlap", 1);
    else ele.addUserInt("isPFoverlap", 0);
 
+   // clean low-pT wrt to all muons
+   int matchedToMuon = 0;
+   for (const pat::Muon &mu : *muons) {
+     if (reco::deltaR(ele, mu) < drMu_cleaning_ && drMu_cleaning_ > 0 && fabs(ele.vz() - mu.vz()) < dzMu_cleaning_ && dzMu_cleaning_ > 0) {
+       matchedToMuon = 1;
+       break;
+     }
+   }
+
    const reco::GsfTrackRef gsfTrk = ele.gsfTrack();
    float unbiased_seedBDT = float((*unBiased)[gsfTrk]);
    float ptbiased_seedBDT = float((*ptBiased)[gsfTrk]);
@@ -284,6 +302,7 @@ void ElectronMerger::produce(edm::StreamID, edm::Event &evt, edm::EventSetup con
    ele.addUserFloat("unBiased", unbiased_seedBDT);
    ele.addUserFloat("mvaId", mva_id);
    ele.addUserFloat("pfmvaId", 20.);
+   ele.addUserInt("isMatchedToMuon", matchedToMuon);
 
    // Attempt to match electrons to conversions in "gsfTracksOpenConversions" collection
    ConversionInfo info;
