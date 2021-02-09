@@ -44,7 +44,7 @@ public:
     isolostTracksToken_(consumes<pat::PackedCandidateCollection>(cfg.getParameter<edm::InputTag>("lostTracks"))),
     isotrk_selection_{cfg.getParameter<std::string>("isoTracksSelection")},
     isotrk_dca_selection_{cfg.getParameter<std::string>("isoTracksDCASelection")},
-    isotrkDCACut_(cfg.getParameter<double>("isotrkDCACut")),
+    isotrkDCALooseCut_(cfg.getParameter<double>("isotrkDCALooseCut")),
     isotrkDCATightCut_(cfg.getParameter<double>("isotrkDCATightCut")),
     drIso_cleaning_(cfg.getParameter<double>("drIso_cleaning")),
     beamspot_{consumes<reco::BeamSpot>( cfg.getParameter<edm::InputTag>("beamSpot") )},
@@ -74,7 +74,7 @@ private:
   const edm::EDGetTokenT<pat::PackedCandidateCollection> isolostTracksToken_;
   const StringCutObjectSelector<pat::PackedCandidate> isotrk_selection_; 
   const StringCutObjectSelector<pat::CompositeCandidate> isotrk_dca_selection_; 
-  const double isotrkDCACut_;
+  const double isotrkDCALooseCut_;
   const double isotrkDCATightCut_;
   const double drIso_cleaning_;
 
@@ -243,10 +243,6 @@ void BToKLLBuilder::produce(edm::StreamID, edm::Event &evt, edm::EventSetup cons
       float k_iso04  = 0;
       float b_iso03  = 0;
       float b_iso04  = 0;
-      int l1_n_isotrk = 0;
-      int l2_n_isotrk = 0;
-      int k_n_isotrk = 0;
-      int b_n_isotrk = 0;
 
       for( unsigned int iTrk=0; iTrk<totalTracks; ++iTrk ) {
       
@@ -273,39 +269,31 @@ void BToKLLBuilder::produce(edm::StreamID, edm::Event &evt, edm::EventSetup cons
 
         if (dr_to_l1 < 0.4){
           l1_iso04 += trk.pt();
-          l1_n_isotrk++;
           if ( dr_to_l1 < 0.3) l1_iso03 += trk.pt();
         }
         if (dr_to_l2 < 0.4){
           l2_iso04 += trk.pt();
-          l2_n_isotrk++;
           if (dr_to_l2 < 0.3)  l2_iso03 += trk.pt();
         }
         if (dr_to_k < 0.4){
           k_iso04 += trk.pt();
-          k_n_isotrk++;
           if (dr_to_k < 0.3) k_iso03 += trk.pt();
         }
         if (dr_to_b < 0.4){
           b_iso04 += trk.pt();
-          b_n_isotrk++;
           if (dr_to_b < 0.3) b_iso03 += trk.pt();
         }
       }
 
       //compute isolation from surrounding tracks only
-      float l1_iso03_dca = 0;
-      float l1_iso04_dca = 0;
-      float l2_iso03_dca = 0;
-      float l2_iso04_dca = 0;
-      float k_iso03_dca  = 0;
-      float k_iso04_dca  = 0;
-      float b_iso03_dca  = 0;
-      float b_iso04_dca  = 0;
-      int l1_n_isotrk_dca = 0;
-      int l2_n_isotrk_dca = 0;
-      int k_n_isotrk_dca = 0;
-      int b_n_isotrk_dca = 0;
+      float l1_iso03_dca_loose = 0;
+      float l1_iso04_dca_loose = 0;
+      float l2_iso03_dca_loose = 0;
+      float l2_iso04_dca_loose = 0;
+      float k_iso03_dca_loose  = 0;
+      float k_iso04_dca_loose  = 0;
+      float b_iso03_dca_loose  = 0;
+      float b_iso04_dca_loose  = 0;
 
       float l1_iso03_dca_tight = 0;
       float l1_iso04_dca_tight = 0;
@@ -315,10 +303,6 @@ void BToKLLBuilder::produce(edm::StreamID, edm::Event &evt, edm::EventSetup cons
       float k_iso04_dca_tight  = 0;
       float b_iso03_dca_tight  = 0;
       float b_iso04_dca_tight  = 0;
-      int l1_n_isotrk_dca_tight = 0;
-      int l2_n_isotrk_dca_tight = 0;
-      int k_n_isotrk_dca_tight = 0;
-      int b_n_isotrk_dca_tight = 0;
 
       for(size_t trk_idx = 0; trk_idx < kaons->size(); ++trk_idx) {
         // corss clean kaon
@@ -341,7 +325,7 @@ void BToKLLBuilder::produce(edm::StreamID, edm::Event &evt, edm::EventSetup cons
         TrajectoryStateOnSurface tsos_iso = extrapolator.extrapolate(kaons_ttracks->at(trk_idx).impactPointState(), fitter.fitted_vtx());
         std::pair<bool,Measurement1D> cur3DIP_iso = absoluteImpactParameter3D(tsos_iso, fitter.fitted_refvtx());
         float svip_iso = cur3DIP_iso.second.value();
-        if (cur3DIP_iso.first && svip_iso < isotrkDCACut_) {
+        if (cur3DIP_iso.first && svip_iso < isotrkDCALooseCut_) {
           // add to final particle iso if dR < cone
           float dr_to_l1 = deltaR(cand.userFloat("fitted_l1_eta"), cand.userFloat("fitted_l1_phi"), trk_ptr->eta(), trk_ptr->phi());
           float dr_to_l2 = deltaR(cand.userFloat("fitted_l2_eta"), cand.userFloat("fitted_l2_phi"), trk_ptr->eta(), trk_ptr->phi());
@@ -349,56 +333,48 @@ void BToKLLBuilder::produce(edm::StreamID, edm::Event &evt, edm::EventSetup cons
           float dr_to_b  = deltaR(cand.userFloat("fitted_eta")   , cand.userFloat("fitted_phi") , trk_ptr->eta(), trk_ptr->phi());
 
           if (dr_to_l1 < 0.4){
-            l1_iso04_dca += trk_ptr->pt();
-            l1_n_isotrk_dca++;
+            l1_iso04_dca_loose += trk_ptr->pt();
             if (svip_iso < isotrkDCATightCut_) {
               l1_iso04_dca_tight += trk_ptr->pt();
-              l1_n_isotrk_dca_tight++;
             }
             if (dr_to_l1 < 0.3) {
-              l1_iso03_dca += trk_ptr->pt();
+              l1_iso03_dca_loose += trk_ptr->pt();
               if (svip_iso < isotrkDCATightCut_) {
                 l1_iso03_dca_tight += trk_ptr->pt();
               }
             }
           }
           if (dr_to_l2 < 0.4){
-            l2_iso04_dca += trk_ptr->pt();
-            l2_n_isotrk_dca++;
+            l2_iso04_dca_loose += trk_ptr->pt();
             if (svip_iso < isotrkDCATightCut_) {
               l2_iso04_dca_tight += trk_ptr->pt();
-              l2_n_isotrk_dca_tight++;
             }
             if (dr_to_l2 < 0.3) {
-              l2_iso03_dca += trk_ptr->pt();
+              l2_iso03_dca_loose += trk_ptr->pt();
               if (svip_iso < isotrkDCATightCut_) {
                 l2_iso03_dca_tight += trk_ptr->pt();
               }
             }
           }
           if (dr_to_k < 0.4){
-            k_iso04_dca += trk_ptr->pt();
-            k_n_isotrk_dca++;
+            k_iso04_dca_loose += trk_ptr->pt();
             if (svip_iso < isotrkDCATightCut_) {
               k_iso04_dca_tight += trk_ptr->pt();
-              k_n_isotrk_dca_tight++;
             }
             if (dr_to_k < 0.3) {
-              k_iso03_dca += trk_ptr->pt();
+              k_iso03_dca_loose += trk_ptr->pt();
               if (svip_iso < isotrkDCATightCut_) {
                 k_iso03_dca_tight += trk_ptr->pt();
               }
             }
           }
           if (dr_to_b < 0.4){
-            b_iso04_dca += trk_ptr->pt();
-            b_n_isotrk_dca++;
+            b_iso04_dca_loose += trk_ptr->pt();
             if (svip_iso < isotrkDCATightCut_) {
               b_iso04_dca_tight += trk_ptr->pt();
-              b_n_isotrk_dca_tight++;
             }
             if (dr_to_b < 0.3) {
-              b_iso03_dca += trk_ptr->pt();
+              b_iso03_dca_loose += trk_ptr->pt();
               if (svip_iso < isotrkDCATightCut_) {
                 b_iso03_dca_tight += trk_ptr->pt();
               }
@@ -416,23 +392,15 @@ void BToKLLBuilder::produce(edm::StreamID, edm::Event &evt, edm::EventSetup cons
       cand.addUserFloat("k_iso04" , k_iso04 );
       cand.addUserFloat("b_iso03" , b_iso03 );
       cand.addUserFloat("b_iso04" , b_iso04 );
-      cand.addUserInt("l1_n_isotrk" , l1_n_isotrk);
-      cand.addUserInt("l2_n_isotrk" , l2_n_isotrk);
-      cand.addUserInt("k_n_isotrk" ,  k_n_isotrk);
-      cand.addUserInt("b_n_isotrk" ,  b_n_isotrk);
 
-      cand.addUserFloat("l1_iso03_dca", l1_iso03_dca);
-      cand.addUserFloat("l1_iso04_dca", l1_iso04_dca);
-      cand.addUserFloat("l2_iso03_dca", l2_iso03_dca);
-      cand.addUserFloat("l2_iso04_dca", l2_iso04_dca);
-      cand.addUserFloat("k_iso03_dca" , k_iso03_dca );
-      cand.addUserFloat("k_iso04_dca" , k_iso04_dca );
-      cand.addUserFloat("b_iso03_dca" , b_iso03_dca );
-      cand.addUserFloat("b_iso04_dca" , b_iso04_dca );
-      cand.addUserInt("l1_n_isotrk_dca" , l1_n_isotrk_dca);
-      cand.addUserInt("l2_n_isotrk_dca" , l2_n_isotrk_dca);
-      cand.addUserInt("k_n_isotrk_dca" ,  k_n_isotrk_dca);
-      cand.addUserInt("b_n_isotrk_dca" ,  b_n_isotrk_dca);
+      cand.addUserFloat("l1_iso03_dca_loose", l1_iso03_dca_loose);
+      cand.addUserFloat("l1_iso04_dca_loose", l1_iso04_dca_loose);
+      cand.addUserFloat("l2_iso03_dca_loose", l2_iso03_dca_loose);
+      cand.addUserFloat("l2_iso04_dca_loose", l2_iso04_dca_loose);
+      cand.addUserFloat("k_iso03_dca_loose" , k_iso03_dca_loose );
+      cand.addUserFloat("k_iso04_dca_loose" , k_iso04_dca_loose );
+      cand.addUserFloat("b_iso03_dca_loose" , b_iso03_dca_loose );
+      cand.addUserFloat("b_iso04_dca_loose" , b_iso04_dca_loose );
 
       cand.addUserFloat("l1_iso03_dca_tight", l1_iso03_dca_tight);
       cand.addUserFloat("l1_iso04_dca_tight", l1_iso04_dca_tight);
@@ -442,10 +410,6 @@ void BToKLLBuilder::produce(edm::StreamID, edm::Event &evt, edm::EventSetup cons
       cand.addUserFloat("k_iso04_dca_tight" , k_iso04_dca_tight );
       cand.addUserFloat("b_iso03_dca_tight" , b_iso03_dca_tight );
       cand.addUserFloat("b_iso04_dca_tight" , b_iso04_dca_tight );
-      cand.addUserInt("l1_n_isotrk_dca_tight" , l1_n_isotrk_dca_tight);
-      cand.addUserInt("l2_n_isotrk_dca_tight" , l2_n_isotrk_dca_tight);
-      cand.addUserInt("k_n_isotrk_dca_tight" ,  k_n_isotrk_dca_tight);
-      cand.addUserInt("b_n_isotrk_dca_tight" ,  b_n_isotrk_dca_tight);
 
       ret_val->push_back(cand);
     } // for(size_t ll_idx = 0; ll_idx < dileptons->size(); ++ll_idx) {
